@@ -4,30 +4,33 @@ const app = express();
 
 app.use(express.json());
 
+// Webhook URL nhóm SeaTalk của bạn
 const SEATALK_WEBHOOK_URL = "https://openapi.seatalk.io/webhook/group/nzILNwSCRn6NKRzzoi7RIg";
 
+// Bộ nhớ tạm lưu danh sách order
 let orderList = [];
 
 app.post('/seatalk-webhook', async (req, res) => {
     const data = req.body || {};
 
-    // 1. XỬ LÝ XÁC THỰC (VERIFICATION TEST) DÀNH CHO SEATALK
-    // Bắt mọi kiểu gửi challenge từ SeaTalk
+    // 1. XÁC THỰC EVENT CALLBACK URL VỚI SEATALK ( BẮT BỘC )
     const challenge = data.challenge || data.event?.challenge;
     if (data.event_type === 'event_verification' || challenge) {
         return res.status(200).json({ challenge: challenge });
     }
 
-    // 2. XỬ LÝ TIN NHẮN TỪ NHÓM
+    // 2. XỬ LÝ TIN NHẮN ĐẶT MÓN TỪ NHÓM CHAT
     try {
         if (data.event_type === 'message_from_bot_subscriber' || data.event_type === 'group_message' || data.event) {
             const message = data.event?.message || {};
             const textContent = message.text ? message.text.content : '';
             const senderName = data.event?.sender?.name || "Đồng nghiệp";
 
+            // Lọc bỏ thẻ tag bot <at id="...">...</at>
             const cleanText = textContent.replace(/<at id=".*?">.*?<\/at>/g, '').trim();
             const lowerText = cleanText.toLowerCase();
 
+            // Các lệnh điều khiển
             if (lowerText === "danh sách" || lowerText === "ds") {
                 await sendGroupMessage(renderOrderList());
             } else if (lowerText === "xóa đơn" || lowerText === "xoa don") {
@@ -36,8 +39,9 @@ app.post('/seatalk-webhook', async (req, res) => {
             } else if (lowerText === "chốt đơn" || lowerText === "chot don") {
                 const finalMsg = "🔒 **ĐÃ CHỐT ĐƠN HỒNG TRÀ NGÔ GIA!** 🔒\n" + renderOrderList();
                 await sendGroupMessage(finalMsg);
-                orderList = [];
+                orderList = []; // Xóa danh sách sau khi chốt
             } else if (cleanText.length > 0) {
+                // Cú pháp: [Tên món] - [Ghi chú] - [Số lượng]
                 const parts = cleanText.split('-').map(p => p.trim());
                 if (parts.length >= 1) {
                     const mon = parts[0];
@@ -66,7 +70,7 @@ app.post('/seatalk-webhook', async (req, res) => {
             }
         }
     } catch (err) {
-        console.error("Lỗi xử lý:", err);
+        console.error("Lỗi xử lý tin nhắn:", err);
     }
 
     res.status(200).send('OK');
@@ -91,9 +95,9 @@ async function sendGroupMessage(text) {
             text: { content: text }
         });
     } catch (error) {
-        console.error("Lỗi gửi tin nhắn:", error.message);
+        console.error("Lỗi gửi tin nhắn SeaTalk:", error.message);
     }
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server bot trà sữa đang chạy trên port ${PORT}`));
